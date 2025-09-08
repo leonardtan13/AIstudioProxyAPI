@@ -1,6 +1,6 @@
 # --- browser_utils/__init__.py ---
 # 浏览器操作工具模块
-from .initialization import _initialize_page_logic, _close_page_logic, signal_camoufox_shutdown
+from .initialization import _initialize_page_logic, _close_page_logic, signal_camoufox_shutdown, enable_temporary_chat_mode
 from .operations import (
     _handle_model_list_response,
     detect_and_extract_page_error,
@@ -28,6 +28,7 @@ __all__ = [
     '_initialize_page_logic',
     '_close_page_logic', 
     'signal_camoufox_shutdown',
+    'enable_temporary_chat_mode',
     
     # 页面操作相关
     '_handle_model_list_response',

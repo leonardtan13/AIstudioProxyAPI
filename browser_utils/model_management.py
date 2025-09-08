@@ -274,27 +274,49 @@ async def switch_ai_studio_model(page: AsyncPage, model_id: str, req_id: str) ->
                     if m_obj.get("id") == model_id:
                         expected_display_name_for_target_id = m_obj.get("display_name")
                         break
+
+            try:
+                model_name_locator = page.locator('[data-test-id="model-name"]')
+                actual_displayed_model_id_on_page_raw = await model_name_locator.first.inner_text(timeout=5000)
+                actual_displayed_model_id_on_page = actual_displayed_model_id_on_page_raw.strip()
+                
+                target_model_id = model_id
+
+                if actual_displayed_model_id_on_page == target_model_id:
+                    page_display_match = True
+                    logger.info(f"[{req_id}] ✅ 页面显示模型ID ('{actual_displayed_model_id_on_page}') 与期望ID ('{target_model_id}') 一致。")
+                else:
+                    page_display_match = False
+                    logger.error(f"[{req_id}] ❌ 页面显示模型ID ('{actual_displayed_model_id_on_page}') 与期望ID ('{target_model_id}') 不一致。")
             
-            if not expected_display_name_for_target_id:
-                logger.warning(f"[{req_id}] 无法在parsed_model_list中找到目标ID '{model_id}' 的显示名称，跳过页面显示名称验证。这可能不准确。")
-                page_display_match = True
-            else:
-                try:
-                    model_name_locator = page.locator('mat-select[data-test-ms-model-selector] div.model-option-content span.gmat-body-medium')
-                    actual_displayed_model_name_on_page_raw = await model_name_locator.first.inner_text(timeout=5000)
-                    actual_displayed_model_name_on_page = actual_displayed_model_name_on_page_raw.strip()
-                    normalized_actual_display = actual_displayed_model_name_on_page.lower()
-                    normalized_expected_display = expected_display_name_for_target_id.strip().lower()
-                    
-                    if normalized_actual_display == normalized_expected_display:
-                        page_display_match = True
-                        logger.info(f"[{req_id}] ✅ 页面显示模型 ('{actual_displayed_model_name_on_page}') 与期望 ('{expected_display_name_for_target_id}') 一致。")
-                    else:
-                        logger.error(f"[{req_id}] ❌ 页面显示模型 ('{actual_displayed_model_name_on_page}') 与期望 ('{expected_display_name_for_target_id}') 不一致。(Raw page: '{actual_displayed_model_name_on_page_raw}')")
-                except Exception as e_disp:
-                    logger.warning(f"[{req_id}] 读取页面显示的当前模型名称时出错: {e_disp}。将无法验证页面显示。")
-            
+            except Exception as e_disp:
+                page_display_match = False # 读取失败则认为不匹配
+                logger.warning(f"[{req_id}] 读取页面显示的当前模型ID时出错: {e_disp}。将无法验证页面显示。")
+
             if page_display_match:
+                try:
+                    logger.info(f"[{req_id}] 模型切换成功，重新启用 '临时聊天' 模式...")
+                    incognito_button_locator = page.locator('button[aria-label="Temporary chat toggle"]')
+                    
+                    await incognito_button_locator.wait_for(state="visible", timeout=5000)
+                    
+                    button_classes = await incognito_button_locator.get_attribute("class")
+                    
+                    if button_classes and 'ms-button-active' in button_classes:
+                        logger.info(f"[{req_id}] '临时聊天' 模式已处于激活状态。")
+                    else:
+                        logger.info(f"[{req_id}] '临时聊天' 模式未激活，正在点击以开启...")
+                        await incognito_button_locator.click(timeout=3000)
+                        await asyncio.sleep(0.5)
+                        
+                        updated_classes = await incognito_button_locator.get_attribute("class")
+                        if updated_classes and 'ms-button-active' in updated_classes:
+                             logger.info(f"[{req_id}] ✅ '临时聊天' 模式已成功重新启用。")
+                        else:
+                             logger.warning(f"[{req_id}] ⚠️ 点击后 '临时聊天' 模式状态验证失败，可能未成功重新开启。")
+                
+                except Exception as e:
+                    logger.warning(f"[{req_id}] ⚠️ 模型切换后重新启用 '临时聊天' 模式失败: {e}")
                 return True
             else:
                 logger.error(f"[{req_id}] ❌ 模型切换失败，因为页面显示的模型与期望不符 (即使localStorage可能已更改)。")
@@ -306,7 +328,7 @@ async def switch_ai_studio_model(page: AsyncPage, model_id: str, req_id: str) ->
         current_displayed_name_for_revert_stripped = "无法读取"
         
         try:
-            model_name_locator_revert = page.locator('mat-select[data-test-ms-model-selector] div.model-option-content span.gmat-body-medium')
+            model_name_locator_revert = page.locator('[data-test-id="model-name"]')
             current_displayed_name_for_revert_raw = await model_name_locator_revert.first.inner_text(timeout=5000)
             current_displayed_name_for_revert_stripped = current_displayed_name_for_revert_raw.strip()
             logger.info(f"[{req_id}] 恢复：页面当前显示的模型名称 (原始: '{current_displayed_name_for_revert_raw}', 清理后: '{current_displayed_name_for_revert_stripped}')")
@@ -324,17 +346,9 @@ async def switch_ai_studio_model(page: AsyncPage, model_id: str, req_id: str) ->
             return False
         
         model_id_to_revert_to = None
-        if parsed_model_list and current_displayed_name_for_revert_stripped != "无法读取":
-            normalized_current_display_for_revert = current_displayed_name_for_revert_stripped.lower()
-            for m_obj in parsed_model_list:
-                parsed_list_display_name = m_obj.get("display_name", "").strip().lower()
-                if parsed_list_display_name == normalized_current_display_for_revert:
-                    model_id_to_revert_to = m_obj.get("id")
-                    logger.info(f"[{req_id}] 恢复：页面显示名称 '{current_displayed_name_for_revert_stripped}' 对应模型ID: {model_id_to_revert_to}")
-                    break
-            
-            if not model_id_to_revert_to:
-                logger.warning(f"[{req_id}] 恢复：无法在 parsed_model_list 中找到与页面显示名称 '{current_displayed_name_for_revert_stripped}' 匹配的模型ID。")
+        if current_displayed_name_for_revert_stripped != "无法读取":
+            model_id_to_revert_to = current_displayed_name_for_revert_stripped
+            logger.info(f"[{req_id}] 恢复：页面当前显示的ID是 '{model_id_to_revert_to}'，将直接用于恢复。")
         else:
             if current_displayed_name_for_revert_stripped == "无法读取":
                  logger.warning(f"[{req_id}] 恢复：因无法读取页面显示名称，故不能从 parsed_model_list 转换ID。")
@@ -529,7 +543,7 @@ async def _set_model_from_page_display(page: AsyncPage, set_storage: bool = Fals
     
     try:
         logger.info("   尝试从页面显示元素读取当前模型名称...")
-        model_name_locator = page.locator('mat-select[data-test-ms-model-selector] div.model-option-content span.gmat-body-medium')
+        model_name_locator = page.locator('[data-test-id="model-name"]')
         displayed_model_name_from_page_raw = await model_name_locator.first.inner_text(timeout=7000)
         displayed_model_name = displayed_model_name_from_page_raw.strip()
         logger.info(f"   页面当前显示模型名称 (原始: '{displayed_model_name_from_page_raw}', 清理后: '{displayed_model_name}')")
@@ -542,19 +556,10 @@ async def _set_model_from_page_display(page: AsyncPage, set_storage: bool = Fals
             except asyncio.TimeoutError: 
                 logger.warning("   等待模型列表超时，可能无法准确转换显示名称为ID。")
         
-        if parsed_model_list:
-            for model_obj in parsed_model_list:
-                if model_obj.get("display_name") and model_obj.get("display_name").strip() == displayed_model_name:
-                    found_model_id_from_display = model_obj.get("id")
-                    logger.info(f"   显示名称 '{displayed_model_name}' 对应模型 ID: {found_model_id_from_display}")
-                    break
-            
-            if not found_model_id_from_display:
-                 logger.warning(f"   未在已知模型列表中找到与显示名称 '{displayed_model_name}' 匹配的 ID。")
-        else:
-            logger.warning("   模型列表尚不可用，无法将显示名称转换为ID。")
+        found_model_id_from_display = displayed_model_name
+        logger.info(f"   页面显示的直接是模型ID: '{found_model_id_from_display}'")
         
-        new_model_value = found_model_id_from_display if found_model_id_from_display else displayed_model_name
+        new_model_value = found_model_id_from_display
         if server.current_ai_studio_model_id != new_model_value:
             server.current_ai_studio_model_id = new_model_value
             logger.info(f"   全局 current_ai_studio_model_id 已更新为: {server.current_ai_studio_model_id}")
