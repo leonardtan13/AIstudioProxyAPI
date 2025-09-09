@@ -989,47 +989,32 @@ async function processQueue() {
               console.log(`[${reqId}] 检测到可能是新对话 (消息数: ${messages.length})，尝试清空聊天记录...`);
               try {
                   const clearButton = page.locator(CLEAR_CHAT_BUTTON_SELECTOR);
-                  console.log(`[${reqId}]   - 查找并点击"Clear chat"按钮...`);
+                  console.log(`[${reqId}]   - 查找并点击"Clear chat" (New chat) 按钮...`);
                   await clearButton.waitFor({ state: 'visible', timeout: 7000 });
                   await clearButton.click({ timeout: 5000 });
-                  console.log(`[${reqId}]   - "Clear chat"按钮已点击。`);
+                  console.log(`[${reqId}]   - "Clear chat"按钮已点击。新版UI无确认步骤，开始验证清空效果...`);
 
-                  console.log(`[${reqId}]   - 等待确认对话框及"Continue"按钮出现...`);
-                  const confirmButton = page.locator(CLEAR_CHAT_CONFIRM_BUTTON_SELECTOR);
-                  await confirmButton.waitFor({ state: 'visible', timeout: 5000 });
-
-                  console.log(`[${reqId}]   - 点击"Continue"按钮...`);
-                  await confirmButton.click({ timeout: 5000 });
-                  console.log(`[${reqId}]   - "Continue"按钮已点击。开始验证清空效果...`);
-
-                  // --- 新增：验证清空效果 ---
                   const checkStartTime = Date.now();
                   let cleared = false;
                   while (Date.now() - checkStartTime < CLEAR_CHAT_VERIFY_TIMEOUT_MS) {
-                      // 定位所有 AI 回复容器
                       const modelTurns = page.locator(RESPONSE_CONTAINER_SELECTOR);
                       const count = await modelTurns.count();
                       if (count === 0) {
                           console.log(`[${reqId}]   ✅ 验证成功: 页面上未找到之前的 AI 回复元素 (耗时 ${Date.now() - checkStartTime}ms)。`);
                           cleared = true;
-                          break; // 验证成功，退出循环
+                          break;
                       }
-                      // 稍微等待后再次检查
                       await page.waitForTimeout(CLEAR_CHAT_VERIFY_INTERVAL_MS);
                   }
 
                   if (!cleared) {
-                      // 如果超时后仍然找到 AI 回复元素
                       console.warn(`[${reqId}]   ⚠️ 验证超时: 在 ${CLEAR_CHAT_VERIFY_TIMEOUT_MS}ms 内仍能检测到之前的 AI 回复元素。上下文可能未完全清空。`);
-                      // 保存快照以供调试
                       await saveErrorSnapshot(`clear_chat_verify_fail_${reqId}`);
                   }
-                  // --- 结束：验证清空效果 ---
-
               } catch (clearChatError) {
                   console.warn(`[${reqId}] ⚠️ 清空聊天记录或验证时出错: ${clearChatError.message.split('\n')[0]}. 将继续执行请求，但上下文可能未被清除。`);
                   if (clearChatError.message.includes('selector')) {
-                       console.warn(`   (请仔细检查选择器是否仍然有效: CLEAR_CHAT_BUTTON_SELECTOR='${CLEAR_CHAT_BUTTON_SELECTOR}', CLEAR_CHAT_CONFIRM_BUTTON_SELECTOR='${CLEAR_CHAT_CONFIRM_BUTTON_SELECTOR}')`);
+                       console.warn(`   (请仔细检查选择器是否仍然有效: CLEAR_CHAT_BUTTON_SELECTOR='${CLEAR_CHAT_BUTTON_SELECTOR}')`);
                   }
                   await saveErrorSnapshot(`clear_chat_fail_or_verify_${reqId}`);
               }

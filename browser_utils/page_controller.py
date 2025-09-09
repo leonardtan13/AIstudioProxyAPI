@@ -23,6 +23,7 @@ from config import (
 )
 from models import ClientDisconnectedError
 from .operations import save_error_snapshot, _wait_for_response_completion, _get_final_response_content
+from .initialization import enable_temporary_chat_mode
 
 class PageController:
     """封装了与AI Studio页面交互的所有操作。"""
@@ -572,6 +573,8 @@ class PageController:
             if can_attempt_clear:
                 await self._execute_chat_clear(clear_chat_button_locator, confirm_button_locator, overlay_locator, check_client_disconnected)
                 await self._verify_chat_cleared(check_client_disconnected)
+                self.logger.info(f"[{self.req_id}] 聊天已清空，重新启用 '临时聊天' 模式...")
+                await enable_temporary_chat_mode(self.page)
 
         except Exception as e_clear:
             self.logger.error(f"[{self.req_id}] 清空聊天过程中发生错误: {e_clear}")

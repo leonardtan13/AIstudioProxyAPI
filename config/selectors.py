@@ -10,9 +10,9 @@ INPUT_SELECTOR2 = PROMPT_TEXTAREA_SELECTOR
 
 # --- 按钮选择器 ---
 SUBMIT_BUTTON_SELECTOR = 'button[aria-label="Run"].run-button'
-CLEAR_CHAT_BUTTON_SELECTOR = 'button[data-test-clear="outside"][aria-label="Clear chat"]'
-CLEAR_CHAT_CONFIRM_BUTTON_SELECTOR = 'button.mdc-button:has-text("Continue")'
-UPLOAD_BUTTON_SELECTOR = 'button[aria-label="Upload File"]'
+CLEAR_CHAT_BUTTON_SELECTOR = 'button[data-test-clear="outside"][aria-label="New chat"]'
+CLEAR_CHAT_CONFIRM_BUTTON_SELECTOR = 'button.ms-button-primary:has-text("Discard and continue")'
+UPLOAD_BUTTON_SELECTOR = 'button[aria-label^="Insert assets"]'
 
 # --- 响应相关选择器 ---
 RESPONSE_CONTAINER_SELECTOR = 'ms-chat-turn .chat-turn-container.model'
@@ -20,7 +20,7 @@ RESPONSE_TEXT_SELECTOR = 'ms-cmark-node.cmark-node'
 
 # --- 加载和状态选择器 ---
 LOADING_SPINNER_SELECTOR = 'button[aria-label="Run"].run-button svg .stoppable-spinner'
-OVERLAY_SELECTOR = 'div.cdk-overlay-backdrop'
+OVERLAY_SELECTOR = '.mat-mdc-dialog-inner-container'
 
 # --- 错误提示选择器 ---
 ERROR_TOAST_SELECTOR = 'div.toast.warning, div.toast.error'
@@ -39,8 +39,8 @@ COPY_MARKDOWN_BUTTON_SELECTOR_ALT = 'div[role="menu"] button:has-text("Copy Mark
 MAX_OUTPUT_TOKENS_SELECTOR = 'input[aria-label="Maximum output tokens"]'
 STOP_SEQUENCE_INPUT_SELECTOR = 'input[aria-label="Add stop token"]'
 MAT_CHIP_REMOVE_BUTTON_SELECTOR = 'mat-chip-set mat-chip-row button[aria-label*="Remove"]'
-TOP_P_INPUT_SELECTOR = 'div.settings-item-column:has(h3:text-is("Top P")) input[type="number"].slider-input'
-TEMPERATURE_INPUT_SELECTOR = 'div[data-test-id="temperatureSliderContainer"] input[type="number"].slider-input'
+TOP_P_INPUT_SELECTOR = 'ms-slider input[type="number"][max="1"]'
+TEMPERATURE_INPUT_SELECTOR = 'ms-slider input[type="number"][max="2"]'
 USE_URL_CONTEXT_SELECTOR = 'button[aria-label="Browse the url context"]'
 SET_THINKING_BUDGET_TOGGLE_SELECTOR = 'button[aria-label="Toggle thinking budget between auto and manual"]'
 # Thinking budget slider input

@@ -2,7 +2,7 @@ import os
 from typing import Set
 
 API_KEYS: Set[str] = set()
-KEY_FILE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "key.txt")
+KEY_FILE_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "auth_profiles", "key.txt")
 
 def load_api_keys():
     """Loads API keys from the key file into the API_KEYS set."""

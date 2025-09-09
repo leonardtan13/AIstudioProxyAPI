@@ -30,7 +30,8 @@ from browser_utils import (
     _initialize_page_logic,
     _close_page_logic,
     load_excluded_models,
-    _handle_initial_model_state_and_storage
+    _handle_initial_model_state_and_storage,
+    enable_temporary_chat_mode
 )
 
 import stream
@@ -141,6 +142,7 @@ async def _initialize_browser_and_page():
         server.page_instance, server.is_page_ready = await _initialize_page_logic(server.browser_instance)
         if server.is_page_ready:
             await _handle_initial_model_state_and_storage(server.page_instance)
+            await enable_temporary_chat_mode(server.page_instance)
             server.logger.info("Page initialized successfully.")
         else:
             server.logger.error("Page initialization failed.")

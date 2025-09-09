@@ -327,7 +327,9 @@ async def add_api_key(request: ApiKeyRequest, logger: logging.Logger = Depends(g
         raise HTTPException(status_code=400, detail="该API密钥已存在。")
 
     try:
-        key_file_path = os.path.join(os.path.dirname(__file__), "..", "key.txt")
+        # --- MODIFIED LINE ---
+        # Use the centralized path from auth_utils
+        key_file_path = auth_utils.KEY_FILE_PATH
         with open(key_file_path, 'a+', encoding='utf-8') as f:
             f.seek(0)
             if f.read(): f.write("\n")
@@ -366,7 +368,9 @@ async def delete_api_key(request: ApiKeyRequest, logger: logging.Logger = Depend
         raise HTTPException(status_code=404, detail="API密钥不存在。")
 
     try:
-        key_file_path = os.path.join(os.path.dirname(__file__), "..", "key.txt")
+        # --- MODIFIED LINE ---
+        # Use the centralized path from auth_utils
+        key_file_path = auth_utils.KEY_FILE_PATH
         with open(key_file_path, 'r', encoding='utf-8') as f:
             lines = f.readlines()
         
