@@ -377,3 +377,6 @@ bash update.sh
 如果您觉得本项目对您有帮助，并且希望支持作者的持续开发，欢迎通过以下方式进行捐赠。您的支持是对我们最大的鼓励！
 
 ![开发不易，支持作者](./支持作者.jpg)
+
+
+poetry run python -m coordinator.main --profiles auth_profiles/active
