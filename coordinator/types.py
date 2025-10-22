@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 
 @dataclass(frozen=True)
@@ -31,6 +31,7 @@ class ChildProcess:
     ports: ChildPorts
     process: subprocess.Popen[str]
     ready: bool = False
+    log_path: Optional[Path] = None
 
 
 @dataclass(frozen=True)

@@ -5,6 +5,7 @@ import asyncio
 import logging
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Iterable, Sequence
@@ -192,6 +193,42 @@ async def _initialize_children(
             registry.mark_unhealthy(child, "Startup health check failed.")
 
 
+def _monitor_child_processes(
+    children: Iterable[ChildProcess], stop_event: threading.Event
+) -> None:
+    notified: set[str] = set()
+    while not stop_event.is_set():
+        for child in children:
+            process = child.process
+            if process.poll() is None:
+                continue
+            if child.profile.name in notified:
+                continue
+            exit_code = process.returncode
+            log_hint = f" (log file: {child.log_path})" if child.log_path else ""
+            LOGGER.error(
+                "Child '%s' exited with code %s.%s",
+                child.profile.name,
+                exit_code,
+                log_hint,
+            )
+            notified.add(child.profile.name)
+        stop_event.wait(1.0)
+
+    # Final sweep to catch anything that exited just before stop_event was set.
+    for child in children:
+        process = child.process
+        if process.poll() is not None and child.profile.name not in notified:
+            exit_code = process.returncode
+            log_hint = f" (log file: {child.log_path})" if child.log_path else ""
+            LOGGER.error(
+                "Child '%s' exited with code %s.%s",
+                child.profile.name,
+                exit_code,
+                log_hint,
+            )
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     logging.basicConfig(
         level=logging.INFO,
@@ -237,6 +274,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     registry = ChildRegistry(children)
 
+    monitor_stop = threading.Event()
+    monitor_thread = threading.Thread(
+        target=_monitor_child_processes,
+        args=(children, monitor_stop),
+        name="ChildProcessMonitor",
+        daemon=True,
+    )
+    monitor_thread.start()
+
     try:
         asyncio.run(_initialize_children(children, registry))
     except KeyboardInterrupt:
@@ -261,6 +307,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     except KeyboardInterrupt:
         LOGGER.info("Shutdown requested by user.")
     finally:
+        monitor_stop.set()
+        monitor_thread.join(timeout=5)
         try:
             asyncio.run(registry.shutdown())
         except RuntimeError:

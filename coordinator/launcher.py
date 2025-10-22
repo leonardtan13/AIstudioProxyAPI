@@ -16,14 +16,16 @@ _LOG_BYTES = 5 * 1024 * 1024
 _LOG_BACKUPS = 5
 
 
-def _configure_logger(profile: AuthProfile, log_dir: Path) -> logging.Logger:
+def _configure_logger(
+    profile: AuthProfile, log_dir: Path
+) -> tuple[logging.Logger, Path]:
     log_dir.mkdir(parents=True, exist_ok=True)
     logger = logging.getLogger(f"CoordinatorChild.{profile.name}")
     logger.setLevel(logging.INFO)
     logger.propagate = False
 
+    log_path = log_dir / f"{profile.name}.log"
     if not any(isinstance(handler, RotatingFileHandler) for handler in logger.handlers):
-        log_path = log_dir / f"{profile.name}.log"
         handler = RotatingFileHandler(
             log_path, maxBytes=_LOG_BYTES, backupCount=_LOG_BACKUPS, encoding="utf-8"
         )
@@ -32,7 +34,7 @@ def _configure_logger(profile: AuthProfile, log_dir: Path) -> logging.Logger:
         )
         handler.setFormatter(formatter)
         logger.addHandler(handler)
-    return logger
+    return logger, log_path
 
 
 def _pump_stream(stream, logger: logging.Logger, prefix: str) -> None:
@@ -56,7 +58,7 @@ def launch_child(
     if not profile.path.exists():
         raise FileNotFoundError(f"Auth profile not found: {profile.path}")
 
-    logger = _configure_logger(profile, log_dir)
+    logger, log_path = _configure_logger(profile, log_dir)
     repo_root = Path(__file__).resolve().parent.parent
     launcher_script = repo_root / "launch_camoufox.py"
     if not launcher_script.exists():
@@ -114,4 +116,9 @@ def launch_child(
         ports.camoufox_port,
     )
 
-    return ChildProcess(profile=profile, ports=ports, process=process)
+    return ChildProcess(
+        profile=profile,
+        ports=ports,
+        process=process,
+        log_path=log_path,
+    )
