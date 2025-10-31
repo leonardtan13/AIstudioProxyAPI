@@ -84,8 +84,8 @@ Providers must ensure the directory exists, is readable by the current process, 
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] Unit tests exercising `LocalProfileProvider` and `S3ProfileProvider` logic: `poetry run pytest tests/coordinator/test_profiles.py`.
-- [ ] Coordinator CLI without S3 still passes existing tests: `poetry run pytest tests/coordinator`.
+- [x] Unit tests exercising `LocalProfileProvider` and `S3ProfileProvider` logic: `poetry run pytest tests/coordinator/test_profiles.py`.
+- [x] Coordinator CLI without S3 still passes existing tests: `poetry run pytest tests/coordinator`.
 
 #### Manual Verification:
 - [ ] Start coordinator with local backend; confirm regression-free child launch.
@@ -126,9 +126,9 @@ Create a new production Dockerfile and entrypoint that stage dependencies, perfo
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] Image builds successfully: `docker build -f docker/Dockerfile.prod .`.
-- [ ] Basic container smoke test inside CI: `docker run --rm -e PROFILE_BACKEND=local ...`.
-- [ ] Hydration CLI/unit tests run against both local and mocked S3 backends (consider using `pytest` + `moto`).
+- [x] Image builds successfully: `docker build -f docker/Dockerfile.prod .`.
+- [x] Basic container smoke test inside CI: `docker run --rm -e PROFILE_BACKEND=local ...`.
+- [x] Hydration CLI/unit tests run against both local and mocked S3 backends (consider using `pytest` + `moto`).
 
 #### Manual Verification:
 - [ ] Run container with S3 credentials; confirm coordinator logs show hydrated profiles and list launched children.
@@ -164,7 +164,7 @@ Expose distinct liveness/readiness endpoints in both coordinator and child FastA
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] Updated FastAPI tests pass: `poetry run pytest tests/coordinator/test_api.py tests/api/test_health.py` (include cases for `/live`, `/ready`, and legacy `/health` alias).
+- [x] Updated FastAPI tests pass: `poetry run pytest tests/coordinator/test_api.py tests/api/test_health.py` (include cases for `/live`, `/ready`, and legacy `/health` alias).
 
 #### Manual Verification:
 - [ ] Hit `/live` and `/ready` on a running container; observe 200 vs 503 depending on child status (log message should also mention unhealthy children).

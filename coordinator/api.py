@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict
+from typing import Dict
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -48,17 +48,37 @@ def create_app(registry: ChildRegistry) -> FastAPI:
     async def _shutdown() -> None:  # pragma: no cover - FastAPI lifecycle glue
         await registry.shutdown()
 
-    @app.get("/health")
-    async def health() -> Dict[str, Any]:
+    @app.get("/live")
+    async def live() -> Dict[str, str]:
+        return {"status": "alive"}
+
+    def _ready_payload() -> JSONResponse:
         ready = [child.profile.name for child in registry.ready_children()]
         unhealthy = registry.unhealthy_names()
-        status = "OK" if ready else "DEGRADED"
-        return {
+        status = "ready" if ready else "degraded"
+        content = {
             "status": status,
             "ready_children": ready,
             "unhealthy_children": unhealthy,
             "total_children": len(registry.all_children()),
         }
+        status_code = 200 if ready else 503
+        if status_code == 503:
+            LOGGER.warning(
+                "Coordinator readiness failing: no healthy children. Unhealthy children: %s",
+                unhealthy or "(none registered)",
+            )
+        return JSONResponse(status_code=status_code, content=content)
+
+    @app.get("/ready")
+    async def ready() -> JSONResponse:
+        return _ready_payload()
+
+    @app.get("/health")
+    async def health() -> JSONResponse:
+        response = _ready_payload()
+        response.headers["X-Deprecation-Notice"] = "Use /ready instead of /health."
+        return response
 
     @app.post("/v1/chat/completions")
     async def chat_completions(request: Request) -> Response:

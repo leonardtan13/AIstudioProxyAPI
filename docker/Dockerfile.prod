@@ -1,0 +1,110 @@
+# syntax=docker/dockerfile:1
+
+FROM python:3.13-slim-bookworm AS builder
+
+ENV POETRY_VERSION=1.8.3
+ENV POETRY_HOME=/opt/poetry
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        build-essential \
+        libffi-dev \
+        libssl-dev \
+        python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+RUN curl -sSL https://install.python-poetry.org | python3 - --version ${POETRY_VERSION}
+ENV PATH="${POETRY_HOME}/bin:${PATH}"
+
+WORKDIR /app
+COPY pyproject.toml poetry.lock ./
+RUN poetry config virtualenvs.create false --local && \
+    poetry install --no-root --no-dev --no-interaction --no-ansi
+
+FROM python:3.13-slim-bookworm AS runtime
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libatk1.0-0 \
+        libatk-bridge2.0-0 \
+        libcups2 \
+        libdbus-1-3 \
+        libdrm2 \
+        libgbm1 \
+        libgtk-3-0 \
+        libnspr4 \
+        libnss3 \
+        libx11-6 \
+        libx11-xcb1 \
+        libxcb1 \
+        libxcomposite1 \
+        libxdamage1 \
+        libxext6 \
+        libxfixes3 \
+        libxrandr2 \
+        libxrender1 \
+        libxtst6 \
+        libasound2 \
+        libpangocairo-1.0-0 \
+        libpango-1.0-0 \
+        ca-certificates \
+        fonts-liberation \
+        curl \
+        awscli \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+RUN groupadd -r appgroup && useradd -r -g appgroup -s /bin/bash -d /app appuser
+
+WORKDIR /app
+
+COPY --from=builder /usr/local/lib/python3.13/site-packages/ /usr/local/lib/python3.13/site-packages/
+COPY --from=builder /usr/local/bin/ /usr/local/bin/
+
+COPY . .
+
+RUN camoufox fetch && \
+    python -m playwright install firefox
+
+RUN mkdir -p /app/logs \
+    /app/auth_profiles/active \
+    /app/auth_profiles/saved \
+    /app/certs \
+    /app/browser_utils/custom_scripts \
+    /home/appuser/.cache/ms-playwright \
+    /var/cache/camoufox && \
+    if [ -d /root/.cache/camoufox ]; then cp -a /root/.cache/camoufox/* /var/cache/camoufox/; fi && \
+    mkdir -p /app/.cache && \
+    ln -s /var/cache/camoufox /app/.cache/camoufox && \
+    chown -R appuser:appgroup /app /home/appuser /var/cache/camoufox
+
+RUN python update_browserforge_data.py
+
+# Runtime configuration
+# PROFILE_BACKEND controls where auth profiles are sourced from ('local' or 's3').
+# AUTH_PROFILE_CACHE_DIR selects the staging directory for hydrated profiles.
+# AUTH_PROFILE_S3_BUCKET/PREFIX/REGION configure the remote source when using S3.
+# COORDINATOR_HOST/PORT determine the public FastAPI binding.
+# BASE_API_PORT/BASE_STREAM_PORT/BASE_CAMOUFOX_PORT control child process ports.
+# PORT_STEP defines the increment between successive child allocations.
+# HEADLESS toggles browser headless mode for child processes.
+# Additional AWS_* variables supply credentials for S3 access when required.
+ENV PYTHONUNBUFFERED=1 \
+    HOME=/app \
+    PLAYWRIGHT_BROWSERS_PATH=/home/appuser/.cache/ms-playwright \
+    PROFILE_BACKEND=local \
+    AUTH_PROFILE_CACHE_DIR=/tmp/auth_profiles \
+    COORDINATOR_HOST=0.0.0.0 \
+    COORDINATOR_PORT=2048 \
+    BASE_API_PORT=3100 \
+    BASE_STREAM_PORT=3200 \
+    BASE_CAMOUFOX_PORT=9222 \
+    PORT_STEP=1 \
+    HEADLESS=true
+
+EXPOSE 2048
+EXPOSE 3100
+EXPOSE 3200
+
+USER appuser
+
+CMD ["./docker/entrypoint.prod.sh"]

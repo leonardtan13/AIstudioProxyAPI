@@ -26,6 +26,7 @@ aiosocks = "~=0.2.6"
 python-socks = "~=2.7.1"
 httptools = "^0.7.1"
 httpx = "^0.28.1"
+boto3 = "^1.35.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.0.0"
@@ -33,6 +34,7 @@ black = "^23.0.0"
 isort = "^5.12.0"
 mypy = "^1.0.0"
 flake8 = "^6.0.0"
+moto = "^5.0.3"
 
 [build-system]
 requires = ["poetry-core"]

@@ -155,6 +155,11 @@ python launch_camoufox.py --headless
 
 详细配置说明请参见 [环境变量配置指南](docs/environment-configuration.md)。
 
+## 生产部署 (Production Deployment)
+
+- 新增 `docker/Dockerfile.prod`，提供直接启动协调器的生产级容器镜像（Python 3.13，多阶段构建，包含 Camoufox/Playwright 依赖）。
+- 部署说明（环境变量、S3 目录结构、健康检查、运行示例等）请参见 [docs/deployment-prod.md](docs/deployment-prod.md)。
+
 ## 使用教程
 
 推荐使用 [`gui_launcher.py`](gui_launcher.py) (图形界面) 或直接使用 [`launch_camoufox.py`](launch_camoufox.py) (命令行) 进行日常运行。仅在首次设置或认证过期时才需要使用调试模式。

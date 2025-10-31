@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import subprocess
 import sys
 import threading
@@ -10,10 +11,13 @@ import time
 from pathlib import Path
 from typing import Iterable, Sequence
 
+from dataclasses import replace
+
 import uvicorn
 
 from .api import create_app
 from .config import (
+    DEFAULT_AUTH_PROFILE_CACHE_DIR,
     DEFAULT_CHILD_BASE_API_PORT,
     DEFAULT_CHILD_BASE_CAMOUFOX_PORT,
     DEFAULT_CHILD_BASE_STREAM_PORT,
@@ -21,12 +25,14 @@ from .config import (
     DEFAULT_COORDINATOR_PORT,
     DEFAULT_LOG_DIR,
     DEFAULT_PORT_INCREMENT,
+    DEFAULT_PROFILE_BACKEND,
     CoordinatorCLIArgs,
 )
 from .health import wait_for_ready
 from .launcher import launch_child
 from .manager import ChildRegistry
 from .types import AuthProfile, ChildPorts, ChildProcess
+from .profiles import ProfileHydrationError, hydrate_profiles
 
 LOGGER = logging.getLogger("Coordinator")
 
@@ -35,11 +41,48 @@ def parse_args(argv: Sequence[str] | None = None) -> CoordinatorCLIArgs:
     parser = argparse.ArgumentParser(
         description="Launch the AI Studio proxy coordinator."
     )
+    env_profile_backend = os.environ.get("PROFILE_BACKEND", DEFAULT_PROFILE_BACKEND)
+    env_s3_bucket = os.environ.get("AUTH_PROFILE_S3_BUCKET")
+    env_s3_prefix = os.environ.get("AUTH_PROFILE_S3_PREFIX")
+    env_s3_region = os.environ.get("AUTH_PROFILE_S3_REGION")
+    env_cache_dir = os.environ.get("AUTH_PROFILE_CACHE_DIR")
     parser.add_argument(
         "--profiles",
         type=Path,
         default=Path("auth_profiles/active"),
         help="Directory containing auth profile JSON files.",
+    )
+    parser.add_argument(
+        "--profile-backend",
+        choices=("local", "s3"),
+        default=env_profile_backend,
+        help=(
+            "Profile source backend to hydrate before launch. "
+            "Defaults to PROFILE_BACKEND environment variable or 'local'."
+        ),
+    )
+    parser.add_argument(
+        "--auth-profile-s3-bucket",
+        default=env_s3_bucket,
+        help="S3 bucket containing auth profiles when using the 's3' backend.",
+    )
+    parser.add_argument(
+        "--auth-profile-s3-prefix",
+        default=env_s3_prefix,
+        help="S3 prefix containing auth profiles (e.g. 'prod/coordinator').",
+    )
+    parser.add_argument(
+        "--auth-profile-s3-region",
+        default=env_s3_region,
+        help="AWS region for the auth profile bucket. Falls back to default boto3 config.",
+    )
+    parser.add_argument(
+        "--auth-profile-cache-dir",
+        default=env_cache_dir,
+        help=(
+            "Local directory used to cache hydrated auth profiles. "
+            "Defaults to AUTH_PROFILE_CACHE_DIR or '/tmp/auth_profiles'."
+        ),
     )
     parser.add_argument(
         "--base-api-port",
@@ -89,6 +132,12 @@ def parse_args(argv: Sequence[str] | None = None) -> CoordinatorCLIArgs:
     )
 
     args = parser.parse_args(argv)
+    default_cache_dir = DEFAULT_AUTH_PROFILE_CACHE_DIR.expanduser().resolve()
+    resolved_cache_dir = (
+        Path(args.auth_profile_cache_dir).expanduser().resolve()
+        if args.auth_profile_cache_dir
+        else default_cache_dir
+    )
     return CoordinatorCLIArgs(
         profile_dir=args.profiles.resolve(),
         base_api_port=args.base_api_port,
@@ -99,6 +148,11 @@ def parse_args(argv: Sequence[str] | None = None) -> CoordinatorCLIArgs:
         log_dir=args.log_dir.expanduser().resolve(),
         port_increment=args.port_step,
         headless=not args.no_headless,
+        profile_backend=args.profile_backend,
+        auth_profile_s3_bucket=args.auth_profile_s3_bucket,
+        auth_profile_s3_prefix=args.auth_profile_s3_prefix,
+        auth_profile_s3_region=args.auth_profile_s3_region,
+        auth_profile_cache_dir=resolved_cache_dir,
     )
 
 
@@ -235,6 +289,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         format="%(asctime)s - %(levelname)s - %(name)s - %(message)s",
     )
     args = parse_args(argv)
+
+    try:
+        hydration = hydrate_profiles(
+            backend=args.profile_backend,
+            profile_dir=args.profile_dir,
+            bucket=args.auth_profile_s3_bucket,
+            prefix=args.auth_profile_s3_prefix,
+            region=args.auth_profile_s3_region,
+            cache_dir=args.auth_profile_cache_dir,
+        )
+    except ProfileHydrationError as exc:
+        LOGGER.error("Failed to hydrate auth profiles: %s", exc)
+        return 1
+
+    args = replace(args, profile_dir=hydration.profiles_dir)
+    if hydration.key_file:
+        os.environ["AUTH_KEY_FILE_PATH"] = str(hydration.key_file)
+    else:
+        os.environ.pop("AUTH_KEY_FILE_PATH", None)
 
     try:
         profiles = discover_profiles(args.profile_dir)

@@ -10,6 +10,8 @@ DEFAULT_CHILD_BASE_STREAM_PORT = 3200
 DEFAULT_CHILD_BASE_CAMOUFOX_PORT = 9222
 DEFAULT_PORT_INCREMENT = 1
 DEFAULT_LOG_DIR = Path("logs/coordinator")
+DEFAULT_PROFILE_BACKEND = "local"
+DEFAULT_AUTH_PROFILE_CACHE_DIR = Path("/tmp/auth_profiles")
 
 
 @dataclass(frozen=True)
@@ -25,3 +27,8 @@ class CoordinatorCLIArgs:
     log_dir: Path = DEFAULT_LOG_DIR
     port_increment: int = DEFAULT_PORT_INCREMENT
     headless: bool = True
+    profile_backend: str = DEFAULT_PROFILE_BACKEND
+    auth_profile_s3_bucket: str | None = None
+    auth_profile_s3_prefix: str | None = None
+    auth_profile_s3_region: str | None = None
+    auth_profile_cache_dir: Path = DEFAULT_AUTH_PROFILE_CACHE_DIR
