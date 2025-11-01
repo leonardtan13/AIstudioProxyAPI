@@ -115,7 +115,7 @@ def create_app(registry: ChildRegistry) -> FastAPI:
                 child_response = await forward_completion(child, payload)
             except ChildRequestError as exc:
                 if exc.retryable:
-                    registry.mark_unhealthy(child, str(exc))
+                    registry.evict_child(child, str(exc))
                     continue
                 raise HTTPException(status_code=502, detail=str(exc)) from exc
 
@@ -135,7 +135,7 @@ def create_app(registry: ChildRegistry) -> FastAPI:
                 child_response = await forward_models(child)
             except ChildRequestError as exc:
                 if exc.retryable:
-                    registry.mark_unhealthy(child, str(exc))
+                    registry.evict_child(child, str(exc))
                     continue
                 raise HTTPException(status_code=502, detail=str(exc)) from exc
 

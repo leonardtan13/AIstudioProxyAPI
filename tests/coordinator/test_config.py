@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from coordinator.main import assign_ports, discover_profiles
+from coordinator.main import assign_ports
+from coordinator.profiles import discover_profiles
 from coordinator.types import AuthProfile, ChildPorts
 
 

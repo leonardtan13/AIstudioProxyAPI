@@ -35,6 +35,8 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from pydantic import BaseModel, ConfigDict
 
+from .types import AuthProfile
+
 LOGGER = logging.getLogger(__name__)
 
 DEFAULT_CACHE_DIR = Path("/tmp/auth_profiles")
@@ -219,6 +221,36 @@ def hydrate_profiles(
     if result.key_file:
         LOGGER.info("Hydrated API key file at %s", result.key_file)
     return result
+
+
+def discover_profiles(
+    directory: Path, *, pool_size: int | None = None
+) -> list[AuthProfile]:
+    """Return a deterministically ordered set of hydrated auth profiles."""
+
+    if not directory.exists():
+        raise FileNotFoundError(f"Profile directory does not exist: {directory}")
+    if not directory.is_dir():
+        raise NotADirectoryError(f"Profile path is not a directory: {directory}")
+
+    profiles = [
+        AuthProfile(name=json_path.stem, path=json_path.resolve())
+        for json_path in sorted(directory.glob("*.json"))
+    ]
+
+    total = len(profiles)
+    if pool_size is not None:
+        active_count = min(pool_size, total)
+        queued_count = max(total - active_count, 0)
+        LOGGER.info(
+            "Discovered %s auth profile(s); seeding %s active, queueing %s idle.",
+            total,
+            active_count,
+            queued_count,
+        )
+    else:
+        LOGGER.info("Discovered %s auth profile(s).", total)
+    return profiles
 
 
 def _parse_cli_args(argv: Sequence[str] | None) -> argparse.Namespace:

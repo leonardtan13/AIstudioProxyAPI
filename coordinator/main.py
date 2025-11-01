@@ -30,9 +30,15 @@ from .config import (
 )
 from .health import wait_for_ready
 from .launcher import launch_child
-from .manager import ChildRegistry
-from .types import AuthProfile, ChildPorts, ChildProcess
-from .profiles import ProfileHydrationError, hydrate_profiles
+from .manager import ChildRegistry, SlotManager
+from .profiles import (
+    ProfileHydrationError,
+    discover_profiles,
+    hydrate_profiles,
+)
+from .types import ChildPorts, ChildProcess, ProfileQueue, ProfileSlot
+
+PROFILE_POOL_SIZE = 2
 
 LOGGER = logging.getLogger("Coordinator")
 
@@ -156,18 +162,6 @@ def parse_args(argv: Sequence[str] | None = None) -> CoordinatorCLIArgs:
     )
 
 
-def discover_profiles(directory: Path) -> list[AuthProfile]:
-    if not directory.exists():
-        raise FileNotFoundError(f"Profile directory does not exist: {directory}")
-    if not directory.is_dir():
-        raise NotADirectoryError(f"Profile path is not a directory: {directory}")
-
-    profiles: list[AuthProfile] = []
-    for json_path in sorted(directory.glob("*.json")):
-        profiles.append(AuthProfile(name=json_path.stem, path=json_path.resolve()))
-    return profiles
-
-
 def assign_ports(
     count: int,
     base_api: int,
@@ -228,7 +222,7 @@ async def _initialize_children(
     children: Iterable[ChildProcess],
     registry: ChildRegistry,
     *,
-    timeout: float = 30.0,
+    timeout: float = 60.0,
 ) -> None:
     for child in children:
         try:
@@ -248,15 +242,23 @@ async def _initialize_children(
 
 
 def _monitor_child_processes(
-    children: Iterable[ChildProcess], stop_event: threading.Event
+    registry: ChildRegistry,
+    slot_manager: SlotManager,
+    stop_event: threading.Event,
 ) -> None:
-    notified: set[str] = set()
+    notified: set[tuple[str, int | None]] = set()
     while not stop_event.is_set():
-        for child in children:
-            process = child.process
-            if process.poll() is None:
+        for slot in slot_manager.slots():
+            child = slot.process
+            if child is None:
                 continue
-            if child.profile.name in notified:
+            process = child.process
+            pid = getattr(process, "pid", None)
+            key = (child.profile.name, pid)
+            if process.poll() is None:
+                notified.discard(key)
+                continue
+            if key in notified:
                 continue
             exit_code = process.returncode
             log_hint = f" (log file: {child.log_path})" if child.log_path else ""
@@ -266,13 +268,22 @@ def _monitor_child_processes(
                 exit_code,
                 log_hint,
             )
-            notified.add(child.profile.name)
+            notified.add(key)
+            registry.evict_child(
+                child,
+                f"Process exit (code {exit_code})",
+            )
         stop_event.wait(1.0)
 
     # Final sweep to catch anything that exited just before stop_event was set.
-    for child in children:
+    for slot in slot_manager.slots():
+        child = slot.process
+        if child is None:
+            continue
         process = child.process
-        if process.poll() is not None and child.profile.name not in notified:
+        pid = getattr(process, "pid", None)
+        key = (child.profile.name, pid)
+        if process.poll() is not None and key not in notified:
             exit_code = process.returncode
             log_hint = f" (log file: {child.log_path})" if child.log_path else ""
             LOGGER.error(
@@ -310,7 +321,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         os.environ.pop("AUTH_KEY_FILE_PATH", None)
 
     try:
-        profiles = discover_profiles(args.profile_dir)
+        profiles = discover_profiles(
+            args.profile_dir, pool_size=PROFILE_POOL_SIZE
+        )
     except (FileNotFoundError, NotADirectoryError) as exc:
         LOGGER.error(str(exc))
         return 1
@@ -319,38 +332,45 @@ def main(argv: Sequence[str] | None = None) -> int:
         LOGGER.error("No auth profiles found in %s", args.profile_dir)
         return 1
 
+    active_count = min(PROFILE_POOL_SIZE, len(profiles))
     ports = assign_ports(
-        len(profiles),
+        active_count,
         args.base_api_port,
         args.base_stream_port,
         args.base_camoufox_port,
         args.port_increment,
     )
 
-    children: list[ChildProcess] = []
+    slots = [ProfileSlot(ports=assignment) for assignment in ports]
+    queue = ProfileQueue.from_iterable(profiles[active_count:])
+    if queue:
+        LOGGER.debug(
+            "Profiles staged for rotation: %s",
+            [profile.name for profile in queue.snapshot()],
+        )
+
+    slot_manager = SlotManager(
+        slots,
+        profile_queue=queue,
+        headless=args.headless,
+        log_dir=args.log_dir,
+        env={},
+    )
     try:
-        for profile, port_assignment in zip(profiles, ports):
-            child = launch_child(
-                profile,
-                port_assignment,
-                env={},
-                headless=args.headless,
-                log_dir=args.log_dir,
-            )
-            children.append(child)
+        children = slot_manager.bootstrap(profiles[:active_count])
     except Exception as exc:
         LOGGER.exception("Failed to launch child processes: %s", exc)
-        graceful_shutdown(children)
+        slot_manager.shutdown("bootstrap failure")
         return 1
 
     LOGGER.info("Launched %s child process(es).", len(children))
 
-    registry = ChildRegistry(children)
+    registry = ChildRegistry(children, slot_manager=slot_manager)
 
     monitor_stop = threading.Event()
     monitor_thread = threading.Thread(
         target=_monitor_child_processes,
-        args=(children, monitor_stop),
+        args=(registry, slot_manager, monitor_stop),
         name="ChildProcessMonitor",
         daemon=True,
     )
@@ -360,7 +380,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         asyncio.run(_initialize_children(children, registry))
     except KeyboardInterrupt:
         LOGGER.info("Startup interrupted. Beginning shutdown.")
-        graceful_shutdown(children)
+        graceful_shutdown(slot_manager.live_children())
+        slot_manager.clear_queue()
         return 0
 
     ready_names = [child.profile.name for child in registry.ready_children()]
@@ -386,7 +407,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             asyncio.run(registry.shutdown())
         except RuntimeError:
             pass
-        graceful_shutdown(children)
+        graceful_shutdown(slot_manager.live_children())
 
     LOGGER.info("Coordinator shutdown complete.")
     return 0

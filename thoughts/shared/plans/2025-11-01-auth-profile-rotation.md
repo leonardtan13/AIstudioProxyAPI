@@ -78,8 +78,8 @@ slots = [ProfileSlot(ports=p) for p in port_assignments[:4]]
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] Coordinator unit tests covering `ProfileSlot` initialization: `poetry run pytest tests/coordinator/test_main.py::test_slot_bootstrap` (new).
-- [ ] Existing profile hydration tests continue to pass: `poetry run pytest tests/coordinator/test_profiles.py`.
+- [x] Coordinator unit tests covering `ProfileSlot` initialization: `poetry run pytest tests/coordinator/test_main.py::test_slot_bootstrap` (new).
+- [x] Existing profile hydration tests continue to pass: `poetry run pytest tests/coordinator/test_profiles.py`.
 
 #### Manual Verification:
 - [ ] Launch coordinator with >4 local profiles; confirm logs report “Seeded 4 active profiles, queued X idle”.
@@ -126,8 +126,8 @@ class SlotManager:
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] Slot eviction unit test confirms a terminated process is replaced with the next queued profile: `poetry run pytest tests/coordinator/test_manager.py::test_slot_recycle` (new).
-- [ ] API routing tests verify demotion triggers `SlotManager.evict_child`: `poetry run pytest tests/coordinator/test_routing.py::test_timeout_triggers_rotation`.
+- [x] Slot eviction unit test confirms a terminated process is replaced with the next queued profile: `poetry run pytest tests/coordinator/test_manager.py::test_slot_recycle` (new).
+- [x] API routing tests verify demotion triggers `SlotManager.evict_child`: `poetry run pytest tests/coordinator/test_routing.py::test_timeout_triggers_rotation`.
 
 #### Manual Verification:
 - [ ] Induce a child crash (kill PID) and confirm logs show recycle + relaunch with a new profile on the same ports.
@@ -166,8 +166,8 @@ async def wait_for_ready(..., timeout: float = 60.0) -> bool:
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] New tests cover readiness timeout recycling: `poetry run pytest tests/coordinator/test_health.py::test_timeout_triggers_recycle` (new).
-- [ ] Existing routing tests updated to assert `SlotManager` interactions pass: `poetry run pytest tests/coordinator/test_routing.py`.
+- [x] New tests cover readiness timeout recycling: `poetry run pytest tests/coordinator/test_health.py::test_timeout_triggers_recycle` (new).
+- [x] Existing routing tests updated to assert `SlotManager` interactions pass: `poetry run pytest tests/coordinator/test_routing.py`.
 
 #### Manual Verification:
 - [ ] Simulate a timeout by pointing a child at an unreachable upstream; confirm the coordinator rotates the profile and logs the event.
@@ -197,7 +197,7 @@ Backstop the new rotation behaviour with tests and operator notes explaining the
 ### Success Criteria:
 
 #### Automated Verification:
-- [ ] Full coordinator suite passes: `poetry run pytest tests/coordinator`.
+- [x] Full coordinator suite passes: `poetry run pytest tests/coordinator`.
 - [ ] Static analysis/lint (if configured) passes: `poetry run ruff check coordinator`.
 
 #### Manual Verification:

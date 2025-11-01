@@ -229,6 +229,44 @@ async def test_chat_completion_retries_on_unhealthy_child(
 
 
 @pytest.mark.anyio("asyncio")
+async def test_retryable_error_triggers_eviction(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    child = make_child(tmp_path, "solo", api_port=9500)
+    registry = await build_registry([child])
+
+    async def fake_forward_completion(
+        child_process: ChildProcess, payload: ChatCompletionRequest
+    ) -> httpx.Response:
+        raise ChildRequestError(child_process, "boom")
+
+    monkeypatch.setattr(
+        "coordinator.api.forward_completion",
+        fake_forward_completion,
+    )
+
+    evicted: list[str] = []
+    original_evict = registry.evict_child
+
+    def stub_evict(target: ChildProcess, reason: str) -> ChildProcess | None:
+        evicted.append(target.profile.name)
+        return original_evict(target, reason)
+
+    monkeypatch.setattr(registry, "evict_child", stub_evict)
+
+    app = create_app(registry)
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/v1/chat/completions",
+            json={"messages": [{"role": "user", "content": "hi"}]},
+        )
+
+    assert response.status_code == 503
+    assert evicted == ["solo"]
+
+
+@pytest.mark.anyio("asyncio")
 async def test_chat_completion_no_children(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

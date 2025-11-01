@@ -77,6 +77,12 @@ curl -sf http://localhost:2048/live
 curl -sf http://localhost:2048/ready || echo "Coordinator not ready"
 ```
 
+### Profile Rotation Pool
+
+- The coordinator maintains a fixed pool of two Camoufox child processes. Any additional hydrated profiles are staged in a rotation queue.
+- When a child exits, times out during readiness (60 s ceiling), or returns a retryable ≥500 error, the slot manager terminates the process and activates the next queued profile on the same port triple.
+- Evicted profiles are appended to the back of the queue so every profile eventually receives runtime and no additional ports are consumed.
+
 ## Running the Container
 
 ### S3-Backed Deployment

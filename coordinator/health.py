@@ -12,7 +12,7 @@ from .types import ChildProcess
 LOGGER = logging.getLogger("Coordinator.Health")
 
 
-async def wait_for_ready(child: ChildProcess, timeout: float = 30.0) -> bool:
+async def wait_for_ready(child: ChildProcess, timeout: float = 60.0) -> bool:
     """Poll the child `/health` endpoint until it reports ready or timeout elapses."""
 
     deadline = time.monotonic() + max(timeout, 0.0)

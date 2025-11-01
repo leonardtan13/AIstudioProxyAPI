@@ -159,6 +159,7 @@ python launch_camoufox.py --headless
 
 - 新增 `docker/Dockerfile.prod`，提供直接启动协调器的生产级容器镜像（Python 3.13，多阶段构建，包含 Camoufox/Playwright 依赖）。
 - 部署说明（环境变量、S3 目录结构、健康检查、运行示例等）请参见 [docs/deployment-prod.md](docs/deployment-prod.md)。
+- 协调器固定维护 2 个 Camoufox 子进程，其余认证配置将置于轮换队列自动替换，详情见 [Profile Rotation Pool](docs/deployment-prod.md#profile-rotation-pool)。
 
 ## 使用教程
 
